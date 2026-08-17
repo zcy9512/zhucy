@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>技能五子棋 - 联机对战</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  min-height: 100vh;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+/* ====== SCREENS ====== */
+.screen { display: none; width: 100%; max-width: 900px; padding: 20px; }
+.screen.active { display: block; }
+
+/* ====== CONNECTION SCREEN ====== */
+.connection-container {
+  background: rgba(255,255,255,0.05);
+  border-radius: 20px;
+  padding: 40px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+  text-align: center;
+}
+.connection-container h1 {
+  font-size: 2.5em;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #f7971e, #ffd200);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.connection-container p.subtitle {
+  color: #aaa;
+  margin-bottom: 30px;
+  font-size: 1.1em;
+}
+.mode-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+  justify-content: center;
+}
+.mode-tab {
+  padding: 12px 30px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1em;
+  transition: all 0.3s;
+  background: transparent;
+  color: #fff;
+}
+.mode-tab.active { border-color: #f7971e; background: rgba(247,151,30,0.2); }
+.mode-panel { display: none; }
+.mode-panel.active { display: block; }
+.input-group {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 15px 0;
+  flex-wrap: wrap;
+}
+.input-group input {
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  font-size: 1em;
+  width: 250px;
+  outline: none;
+  transition: border-color 0.3s;
+}
+.input-group input:focus { border-color: #f7971e; }
+.btn {
+  padding: 12px 30px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: bold;
+  transition: all 0.3s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-primary { background: linear-gradient(135deg, #f7971e, #ffd200); color: #1a1a2e; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(247,151,30,0.4); }
+.btn-secondary { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+.btn-secondary:hover { background: rgba(255,255,255,0.2); }
+.btn-danger { background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+.room-code {
+  font-size: 2em;
+  font-weight: bold;
+  letter-spacing: 8px;
+  color: #ffd200;
+  padding: 10px 20px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+  display: inline-block;
+  margin: 10px 0;
+}
+.waiting-anim {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #ffd200;
+  margin-left: 5px;
+  animation: pulse 1s infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+/* ====== SKILL SELECT SCREEN ====== */
+.skill-select-container {
+  background: rgba(255,255,255,0.05);
+  border-radius: 20px;
+  padding: 30px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+  text-align: center;
+}
+.skill-select-container h2 {
+  margin-bottom: 10px;
+  font-size: 1.5em;
+}
+.skill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.skill-card {
+  background: rgba(255,255,255,0.05);
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: left;
+}
+.skill-card:hover { border-color: rgba(247,151,30,0.5); transform: translateY(-2px); }
+.skill-card.selected { border-color: #f7971e; background: rgba(247,151,30,0.15); }
+.skill-card.disabled { opacity: 0.4; cursor: not-allowed; }
+.skill-card .skill-name { font-weight: bold; font-size: 1.1em; margin-bottom: 5px; color: #ffd200; }
+.skill-card .skill-desc { font-size: 0.85em; color: #aaa; line-height: 1.4; }
+.skill-card .skill-type {
+  display: inline-block;
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-top: 5px;
+}
+.skill-type.active { background: rgba(52,152,219,0.3); color: #3498db; }
+.skill-type.passive { background: rgba(46,204,113,0.3); color: #2ecc71; }
+.player-select-info {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+.player-select-box {
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 200px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.player-select-box .player-label { font-size: 0.9em; color: #aaa; margin-bottom: 5px; }
+.player-select-box .player-skill { font-size: 1.1em; font-weight: bold; color: #ffd200; min-height: 1.5em; }
+.btn-ready {
+  padding: 15px 50px;
+  font-size: 1.2em;
+  margin-top: 20px;
+}
+
+/* ====== GAME SCREEN ====== */
+.game-container {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.player-panel {
+  background: rgba(255,255,255,0.05);
+  border-radius: 15px;
+  padding: 20px;
+  width: 180px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+  text-align: center;
+  transition: all 0.3s;
+}
+.player-panel.active { border-color: #ffd200; box-shadow: 0 0 20px rgba(255,210,0,0.2); }
+.player-panel .piece-icon {
+  display: inline-block;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  margin-bottom: 8px;
+}
+.player-panel .piece-icon.black { background: radial-gradient(circle at 35% 35%, #555, #111); }
+.player-panel .piece-icon.white { background: radial-gradient(circle at 35% 35%, #fff, #ccc); border: 1px solid #999; }
+.player-panel .player-name { font-size: 1.1em; font-weight: bold; margin-bottom: 5px; }
+.player-panel .player-skill-label { font-size: 0.85em; color: #aaa; }
+.player-panel .player-skill-name { font-size: 0.9em; color: #ffd200; font-weight: bold; }
+.board-wrapper {
+  background: rgba(255,255,255,0.05);
+  border-radius: 15px;
+  padding: 15px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.board-wrapper canvas {
+  display: block;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.game-status {
+  text-align: center;
+  margin: 15px 0;
+  font-size: 1.1em;
+  min-height: 2em;
+}
+.game-controls {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.skill-use-btn {
+  padding: 10px 25px;
+  border: 2px solid rgba(247,151,30,0.5);
+  border-radius: 10px;
+  background: rgba(247,151,30,0.1);
+  color: #ffd200;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+.skill-use-btn:hover { background: rgba(247,151,30,0.3); }
+.skill-use-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.skill-use-btn.active-skill { background: rgba(247,151,30,0.3); border-color: #ffd200; }
+
+/* ====== TOAST ====== */
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  padding: 15px 30px;
+  border-radius: 12px;
+  font-size: 1em;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  max-width: 90%;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.toast.show { opacity: 1; }
+
+/* ====== RESPONSIVE ====== */
+@media (max-width: 768px) {
+  .game-container { flex-direction: column; align-items: center; }
+  .player-panel { width: 100%; max-width: 300px; display: flex; align-items: center; gap: 15px; }
+  .player-panel .piece-icon { margin-bottom: 0; }
+  .connection-container { padding: 20px; }
+  .connection-container h1 { font-size: 1.8em; }
+  .skill-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}
+
+/* ====== SCROLLBAR ====== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- ========== SCREEN 1: CONNECTION ========== -->
+<div class="screen active" id="screen-connection">
+<div class="connection-container">
+  <h1>⚔ 技能五子棋</h1>
+  <p class="subtitle">与好友联机对战，8大技能策略对决</p>
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="online">🌐 联机模式</button>
+    <button class="mode-tab" data-mode="local">👥 本地双人</button>
+  </div>
+
+  <!-- Online Mode -->
+  <div class="mode-panel active" id="panel-online">
+    <div id="online-menu">
+      <div class="input-group">
+        <button class="btn btn-primary" onclick="hostGame()">🎮 创建房间</button>
+        <button class="btn btn-secondary" onclick="showJoinPanel()">🔗 加入房间</button>
+      </div>
+      <div id="join-panel" style="display:none; margin-top: 15px;">
+        <div class="input-group">
+          <input type="text" id="room-code-input" placeholder="输入房间号" maxlength="6" style="text-transform:uppercase;width:180px;text-align:center;font-size:1.2em;letter-spacing:4px;">
+          <button class="btn btn-primary" onclick="joinGame()">加入</button>
+          <button class="btn btn-secondary" onclick="cancelJoin()">取消</button>
+        </div>
+      </div>
+    </div>
+    <div id="online-waiting" style="display:none;">
+      <p>房间已创建，分享房间号给好友：</p>
+      <div class="room-code" id="room-code-display"></div>
+      <p style="color:#aaa;margin-top:10px;">等待好友加入<span class="waiting-anim"></span></p>
+      <button class="btn btn-secondary" onclick="cancelHost()" style="margin-top:15px;">取消</button>
+    </div>
+  </div>
+
+  <!-- Local Mode -->
+  <div class="mode-panel" id="panel-local">
+    <p style="color:#aaa;margin-bottom:20px;">两位玩家在同一设备上轮流操作</p>
+    <button class="btn btn-primary" onclick="startLocalGame()">🎮 开始游戏</button>
+  </div>
+</div>
+</div>
+
+<!-- ========== SCREEN 2: SKILL SELECT ========== -->
+<div class="screen" id="screen-skills">
+<div class="skill-select-container">
+  <h2>🎯 选择技能</h2>
+  <p style="color:#aaa;margin-bottom:10px;">每位玩家选择一项技能，技能不可重复</p>
+  <div class="player-select-info">
+    <div class="player-select-box" id="p1-select-box">
+      <div class="player-label">⚫ 玩家1 (黑棋)</div>
+      <div class="player-skill" id="p1-skill-display">未选择</div>
+    </div>
+    <div class="player-select-box" id="p2-select-box">
+      <div class="player-label">⚪ 玩家2 (白棋)</div>
+      <div class="player-skill" id="p2-skill-display">未选择</div>
+    </div>
+  </div>
+  <div class="skill-grid" id="skill-grid"></div>
+  <button class="btn btn-primary btn-ready" id="btn-ready" disabled onclick="confirmReady()">✅ 准备就绪</button>
+</div>
+</div>
+
+<!-- ========== SCREEN 3: GAME ========== -->
+<div class="screen" id="screen-game">
+<div class="game-status" id="game-status">准备开始...</div>
+<div class="game-container">
+  <div class="player-panel" id="panel-p1">
+    <div class="piece-icon black"></div>
+    <div>
+      <div class="player-name">玩家1</div>
+      <div class="player-skill-label">技能: <span class="player-skill-name" id="p1-game-skill">-</span></div>
+    </div>
+  </div>
+  <div class="board-wrapper">
+    <canvas id="board-canvas"></canvas>
+  </div>
+  <div class="player-panel" id="panel-p2">
+    <div class="piece-icon white"></div>
+    <div>
+      <div class="player-name">玩家2</div>
+      <div class="player-skill-label">技能: <span class="player-skill-name" id="p2-game-skill">-</span></div>
+    </div>
+  </div>
+</div>
+<div class="game-controls" id="game-controls">
+  <button class="btn btn-secondary" onclick="showGameOverScreen()">🏳 认输</button>
+  <button class="btn btn-secondary" onclick="resetGame()">🔄 重新开始</button>
+  <button class="btn btn-secondary" onclick="backToMenu()">🏠 返回菜单</button>
+</div>
+</div>
+
+<script>
+// ============================================================
+//  CONFIGURATION
+// ============================================================
+const BOARD_SIZE = 15;
+const CELL_SIZE = 36;
+const PADDING = 24;
+const CANVAS_SIZE = CELL_SIZE * (BOARD_SIZE - 1) + PADDING * 2;
+
+// ============================================================
+//  SKILLS DEFINITION
+// ============================================================
+const SKILLS = {
+  speed: {
+    id: 'speed',
+    name: '兵贵神速',
+    type: 'active',
+    desc: '下一颗棋子后，随机在棋盘下10颗己方棋子',
+    icon: '⚡',
+    color: '#3498db'
+  },
+  easy_win: {
+    id: 'easy_win',
+    name: '以逸待劳',
+    type: 'passive',
+    desc: '只需4颗棋子即可获胜（对手需5颗）',
+    icon: '🛡',
+    color: '#2ecc71'
+  },
+  extend: {
+    id: 'extend',
+    name: '避实击虚',
+    type: 'active',
+    desc: '下一颗棋子后，向四周延伸4颗，优先斜线',
+    icon: '🌀',
+    color: '#9b59b6'
+  },
+  block2x2: {
+    id: 'block2x2',
+    name: '破釜沉舟',
+    type: 'active',
+    desc: '下一次落子放置2x2的棋子阵（4颗）',
+    icon: '💥',
+    color: '#e74c3c'
+  },
+  split: {
+    id: 'split',
+    name: '事半功倍',
+    type: 'active',
+    desc: '落子后棋子会向四周分裂（上下左右）',
+    icon: '🌟',
+    color: '#f39c12'
+  },
+  reverse: {
+    id: 'reverse',
+    name: '扭转乾坤',
+    type: 'passive',
+    desc: '对手每下一颗棋子，随机一颗对手棋子变为己方',
+    icon: '🔄',
+    color: '#1abc9c'
+  },
+  sweep: {
+    id: 'sweep',
+    name: '横扫千军',
+    type: 'passive',
+    desc: '对手每次发动技能，摧毁对手2颗棋子',
+    icon: '🌪',
+    color: '#e67e22'
+  },
+  late_strike: {
+    id: 'late_strike',
+    name: '后发先至',
+    type: 'passive',
+    desc: '对手需要6颗棋子才能获胜（自己需5颗）',
+    icon: '🐢',
+    color: '#8e44ad'
+  }
+};
+
+const SKILL_IDS = Object.keys(SKILLS);
+
+// ============================================================
+//  GAME STATE
+// ============================================================
+let game = {
+  board: [],
+  currentPlayer: 1, // 1=black, 2=white
+  moveCount: 0,
+  gameOver: false,
+  winner: null,
+  // Players
+  player1: { name: '玩家1', color: 1, skill: null, winNeed: 5 },
+  player2: { name: '玩家2', color: 2, skill: null, winNeed: 5 },
+  // Skill state
+  skillActive: false, // is player using an active skill this turn
+  // Mode
+  mode: null, // 'online' or 'local'
+  isHost: false,
+  peerConn: null,
+  peer: null,
+  roomCode: null,
+  isMyTurn: true, // in online mode, whose turn
+  gameStarted: false,
+  // Touch
+  lastMove: null
+};
+
+// ============================================================
+//  UI HELPERS
+// ============================================================
+function showToast(msg, duration) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), duration || 2500);
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ============================================================
+//  CONNECTION SCREEN
+// ============================================================
+document.querySelectorAll('.mode-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.mode-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + tab.dataset.mode).classList.add('active');
+  });
+});
+
+function showJoinPanel() {
+  document.getElementById('join-panel').style.display = 'block';
+}
+
+function cancelJoin() {
+  document.getElementById('join-panel').style.display = 'none';
+}
+
+// ============================================================
+//  ONLINE MODE (PeerJS)
+// ============================================================
+function generateRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+function hostGame() {
+  game.mode = 'online';
+  game.isHost = true;
+  const roomCode = generateRoomCode();
+  game.roomCode = roomCode;
+
+  document.getElementById('online-menu').style.display = 'none';
+  document.getElementById('online-waiting').style.display = 'block';
+  document.getElementById('room-code-display').textContent = roomCode;
+
+  // Create Peer
+  try {
+    game.peer = new Peer(roomCode, { debug: 0 });
+    game.peer.on('open', (id) => {
+      console.log('Peer created:', id);
+    });
+    game.peer.on('connection', (conn) => {
+      game.peerConn = conn;
+      conn.on('data', (data) => handlePeerData(data));
+      conn.on('open', () => {
+        showToast('好友已连接！');
+        startSkillSelect();
+      });
+    });
+    game.peer.on('error', (err) => {
+      console.error('Peer error:', err);
+      if (err.type === 'unavailable-id') {
+        showToast('房间号被占用，请重新创建', 3000);
+        cancelHost();
+      } else {
+        showToast('连接错误: ' + err.message, 3000);
+      }
+    });
+  } catch (e) {
+    showToast('创建房间失败: ' + e.message, 3000);
+    cancelHost();
+  }
+}
+
+function cancelHost() {
+  if (game.peer) { game.peer.destroy(); game.peer = null; }
+  if (game.peerConn) { game.peerConn.close(); game.peerConn = null; }
+  game.roomCode = null;
+  document.getElementById('online-menu').style.display = 'block';
+  document.getElementById('online-waiting').style.display = 'none';
+}
+
+function joinGame() {
+  const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+  if (code.length < 4) { showToast('请输入有效的房间号', 2000); return; }
+
+  game.mode = 'online';
+  game.isHost = false;
+  game.roomCode = code;
+
+  try {
+    game.peer = new Peer(generateRoomCode(), { debug: 0 });
+    game.peer.on('open', (id) => {
+      console.log('Joiner peer created:', id);
+      const conn = game.peer.connect(code, { reliable: true });
+      game.peerConn = conn;
+      conn.on('open', () => {
+        showToast('已加入房间！');
+        startSkillSelect();
+      });
+      conn.on('data', (data) => handlePeerData(data));
+      conn.on('error', (err) => {
+        console.error('Connection error:', err);
+        showToast('连接失败: ' + err.message, 3000);
+      });
+    });
+    game.peer.on('error', (err) => {
+      console.error('Peer error:', err);
+      if (err.type === 'peer-unavailable') {
+        showToast('房间不存在或已过期', 3000);
+      } else {
+        showToast('连接错误: ' + err.message, 3000);
+      }
+    });
+  } catch (e) {
+    showToast('加入失败: ' + e.message, 3000);
+  }
+}
+
+function sendPeerData(data) {
+  if (game.peerConn && game.peerConn.open) {
+    game.peerConn.send(data);
+  }
+}
+
+function handlePeerData(data) {
+  console.log('Received:', data);
+  switch (data.type) {
+    case 'skill_select':
+      if (game.isHost) {
+        game.player2.skill = data.skill;
+        if (game.player1.skill && game.player2.skill) {
+          sendPeerData({ type: 'both_ready', p1Skill: game.player1.skill, p2Skill: game.player2.skill });
+          startGame();
+        }
+      } else {
+        game.player1.skill = data.skill;
+        if (game.player1.skill && game.player2.skill) {
+          sendPeerData({ type: 'both_ready', p1Skill: game.player1.skill, p2Skill: game.player2.skill });
+        }
+      }
+      updateSkillUI();
+      break;
+    case 'both_ready':
+      game.player1.skill = data.p1Skill;
+      game.player2.skill = data.p2Skill;
+      startGame();
+      break;
+    case 'move':
+      if (data.positions) {
+        applyRemoteMove(data.positions, data.player, data.skillData);
+      }
+      break;
+    case 'game_over':
+      game.gameOver = true;
+      game.winner = data.winner;
+      renderBoard();
+      updateStatus();
+      break;
+    case 'reset':
+      resetGame();
+      break;
+  }
+}
+
+// ============================================================
+//  LOCAL MODE
+// ============================================================
+function startLocalGame() {
+  game.mode = 'local';
+  game.isHost = true;
+  startSkillSelect();
+}
+
+// ============================================================
+//  SKILL SELECTION
+// ============================================================
+function startSkillSelect() {
+  showScreen('screen-skills');
+  renderSkillGrid();
+  game.player1.skill = null;
+  game.player2.skill = null;
+  document.getElementById('btn-ready').disabled = true;
+  document.getElementById('p1-skill-display').textContent = '未选择';
+  document.getElementById('p2-skill-display').textContent = '未选择';
+}
+
+let selectingFor = 1;
+
+function renderSkillGrid() {
+  const grid = document.getElementById('skill-grid');
+  grid.innerHTML = '';
+  SKILL_IDS.forEach(id => {
+    const s = SKILLS[id];
+    const card = document.createElement('div');
+    card.className = 'skill-card';
+    card.dataset.skillId = id;
+    card.innerHTML = `
+      <div class="skill-name">${s.icon} ${s.name}</div>
+      <div class="skill-desc">${s.desc}</div>
+      <span class="skill-type ${s.type}">${s.type === 'active' ? '主动技能' : '被动技能'}</span>
+    `;
+    card.addEventListener('click', () => selectSkill(id));
+    grid.appendChild(card);
+  });
+}
+
+function selectSkill(id) {
+  // Check if already selected
+  if (game.player1.skill === id || game.player2.skill === id) return;
+
+  // Determine which player is selecting
+  if (game.mode === 'local') {
+    // Local mode: player1 selects first, then player2
+    if (!game.player1.skill) {
+      game.player1.skill = id;
+      document.getElementById('p1-skill-display').textContent = SKILLS[id].icon + ' ' + SKILLS[id].name;
+      showToast('玩家1选择了 ' + SKILLS[id].name);
+    } else if (!game.player2.skill && id !== game.player1.skill) {
+      game.player2.skill = id;
+      document.getElementById('p2-skill-display').textContent = SKILLS[id].icon + ' ' + SKILLS[id].name;
+      showToast('玩家2选择了 ' + SKILLS[id].name);
+    }
+  } else {
+    // Online mode
+    if (game.isHost && !game.player1.skill) {
+      game.player1.skill = id;
+      document.getElementById('p1-skill-display').textContent = SKILLS[id].icon + ' ' + SKILLS[id].name;
+      sendPeerData({ type: 'skill_select', skill: id });
+      showToast('你选择了 ' + SKILLS[id].name);
+    } else if (!game.isHost && !game.player2.skill) {
+      game.player2.skill = id;
+      document.getElementById('p2-skill-display').textContent = SKILLS[id].icon + ' ' + SKILLS[id].name;
+      sendPeerData({ type: 'skill_select', skill: id });
+      showToast('你选择了 ' + SKILLS[id].name);
+    }
+  }
+
+  updateSkillUI();
+  checkReady();
+}
+
+function updateSkillUI() {
+  document.querySelectorAll('.skill-card').forEach(card => {
+    const id = card.dataset.skillId;
+    card.classList.remove('selected', 'disabled');
+    if (game.player1.skill === id || game.player2.skill === id) {
+      card.classList.add('selected');
+    }
+    // Can't select already chosen skills
+    if (game.player1.skill === id && game.mode === 'online' && !game.isHost) {
+      card.classList.add('disabled');
+    }
+    if (game.player2.skill === id && game.mode === 'online' && game.isHost) {
+      card.classList.add('disabled');
+    }
+    if (game.player1.skill === id || game.player2.skill === id) {
+      if (game.mode === 'local') {
+        if (game.player1.skill && game.player2.skill) {
+          card.classList.add('disabled');
+        }
+      }
+    }
+  });
+}
+
+function checkReady() {
+  if (game.mode === 'local') {
+    document.getElementById('btn-ready').disabled = !(game.player1.skill && game.player2.skill);
+  } else {
+    if (game.isHost) {
+      document.getElementById('btn-ready').disabled = !game.player1.skill;
+    } else {
+      document.getElementById('btn-ready').disabled = !game.player2.skill;
+    }
+  }
+}
+
+function confirmReady() {
+  if (game.mode === 'online') {
+    // Online mode: game auto-starts when both players select skills
+    showToast('等待对手选择技能...');
+  } else {
+    startGame();
+  }
+}
+
+// ============================================================
+//  GAME INIT
+// ============================================================
+function initBoard() {
+  game.board = [];
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    game.board[r] = [];
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      game.board[r][c] = 0;
+    }
+  }
+}
+
+function startGame() {
+  initBoard();
+  game.currentPlayer = 1;
+  game.moveCount = 0;
+  game.gameOver = false;
+  game.winner = null;
+  game.skillActive = false;
+  game.lastMove = null;
+
+  // Set win conditions
+  game.player1.winNeed = 5;
+  game.player2.winNeed = 5;
+  if (game.player1.skill === 'easy_win') game.player1.winNeed = 4;
+  if (game.player2.skill === 'easy_win') game.player2.winNeed = 4;
+  if (game.player1.skill === 'late_strike') game.player2.winNeed = 6;
+  if (game.player2.skill === 'late_strike') game.player1.winNeed = 6;
+
+  // Online: set turn
+  if (game.mode === 'online') {
+    game.isMyTurn = game.isHost; // Host goes first (black)
+  }
+
+  showScreen('screen-game');
+  document.getElementById('game-controls').style.display = 'flex';
+  document.getElementById('p1-game-skill').textContent = game.player1.skill ? SKILLS[game.player1.skill].icon + ' ' + SKILLS[game.player1.skill].name : '无';
+  document.getElementById('p2-game-skill').textContent = game.player2.skill ? SKILLS[game.player2.skill].icon + ' ' + SKILLS[game.player2.skill].name : '无';
+
+  setupCanvas();
+  renderBoard();
+  updateStatus();
+  updateControls();
+}
+
+// ============================================================
+//  CANVAS SETUP
+// ============================================================
+let canvas, ctx;
+function setupCanvas() {
+  canvas = document.getElementById('board-canvas');
+  canvas.width = CANVAS_SIZE;
+  canvas.height = CANVAS_SIZE;
+  ctx = canvas.getContext('2d');
+
+  canvas.onclick = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    handleBoardClick(x, y);
+  };
+}
+
+function getCellFromClick(x, y) {
+  const col = Math.round((x - PADDING) / CELL_SIZE);
+  const row = Math.round((y - PADDING) / CELL_SIZE);
+  if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
+    const cx = PADDING + col * CELL_SIZE;
+    const cy = PADDING + row * CELL_SIZE;
+    const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+    if (dist <= CELL_SIZE * 0.45) {
+      return { row, col };
+    }
+  }
+  return null;
+}
+
+// ============================================================
+//  BOARD RENDER
+// ============================================================
+function renderBoard() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background
+  ctx.fillStyle = '#DEB887';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Grid lines
+  ctx.strokeStyle = '#8B7355';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < BOARD_SIZE; i++) {
+    ctx.beginPath();
+    ctx.moveTo(PADDING, PADDING + i * CELL_SIZE);
+    ctx.lineTo(PADDING + (BOARD_SIZE - 1) * CELL_SIZE, PADDING + i * CELL_SIZE);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(PADDING + i * CELL_SIZE, PADDING);
+    ctx.lineTo(PADDING + i * CELL_SIZE, PADDING + (BOARD_SIZE - 1) * CELL_SIZE);
+    ctx.stroke();
+  }
+
+  // Star points
+  const stars = [[3,3], [3,7], [3,11], [7,3], [7,7], [7,11], [11,3], [11,7], [11,11]];
+  ctx.fillStyle = '#8B7355';
+  stars.forEach(([r, c]) => {
+    ctx.beginPath();
+    ctx.arc(PADDING + c * CELL_SIZE, PADDING + r * CELL_SIZE, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Pieces
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (game.board[r][c] !== 0) {
+        drawPiece(r, c, game.board[r][c]);
+      }
+    }
+  }
+
+  // Last move marker
+  if (game.lastMove) {
+    const { row, col } = game.lastMove;
+    const x = PADDING + col * CELL_SIZE;
+    const y = PADDING + row * CELL_SIZE;
+    ctx.strokeStyle = '#ff0000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function drawPiece(row, col, color) {
+  const x = PADDING + col * CELL_SIZE;
+  const y = PADDING + row * CELL_SIZE;
+  const r = CELL_SIZE * 0.42;
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+
+  if (color === 1) {
+    const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+    grad.addColorStop(0, '#555');
+    grad.addColorStop(1, '#111');
+    ctx.fillStyle = grad;
+  } else {
+    const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+    grad.addColorStop(0, '#fff');
+    grad.addColorStop(1, '#ccc');
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.fill();
+}
+
+// ============================================================
+//  GAME STATUS & CONTROLS
+// ============================================================
+function updateStatus() {
+  const el = document.getElementById('game-status');
+  if (game.gameOver) {
+    if (game.winner === 1) el.innerHTML = '🎉 玩家1（黑棋）获胜！';
+    else if (game.winner === 2) el.innerHTML = '🎉 玩家2（白棋）获胜！';
+    else el.innerHTML = '🤝 平局！';
+    return;
+  }
+
+  const playerName = game.currentPlayer === 1 ? '玩家1（黑棋）' : '玩家2（白棋）';
+  let skillInfo = '';
+  const skillId = game.currentPlayer === 1 ? game.player1.skill : game.player2.skill;
+  if (skillId && SKILLS[skillId].type === 'active') {
+    skillInfo = ` [${SKILLS[skillId].name}]`;
+  }
+
+  let turnInfo = '';
+  if (game.mode === 'online') {
+    const isMyTurn = (game.currentPlayer === 1 && game.isHost) || (game.currentPlayer === 2 && !game.isHost);
+    turnInfo = isMyTurn ? '（你的回合）' : '（对手回合）';
+  }
+
+  el.innerHTML = `${playerName}的回合${turnInfo}${skillInfo}`;
+}
+
+function updateControls() {
+  const controls = document.getElementById('game-controls');
+  let html = '';
+
+  // Show skill use button for active skills
+  if (!game.gameOver && game.currentPlayer) {
+    const skillId = game.currentPlayer === 1 ? game.player1.skill : game.player2.skill;
+    if (skillId && SKILLS[skillId].type === 'active') {
+      const canUse = game.mode !== 'online' || (game.mode === 'online' &&
+        ((game.currentPlayer === 1 && game.isHost) || (game.currentPlayer === 2 && !game.isHost)));
+      html += `<button class="skill-use-btn ${game.skillActive ? 'active-skill' : ''}" id="btn-use-skill" ${canUse ? '' : 'disabled'}>
+        ${game.skillActive ? '取消技能' : '使用技能: ' + SKILLS[skillId].name}
+      </button>`;
+    }
+  }
+
+  html += `<button class="btn btn-secondary" onclick="showGameOverScreen()">🏳 认输</button>`;
+  html += `<button class="btn btn-secondary" onclick="resetGame()">🔄 重新开始</button>`;
+  html += `<button class="btn btn-secondary" onclick="backToMenu()">🏠 返回菜单</button>`;
+
+  controls.innerHTML = html;
+
+  // Bind skill button
+  const skillBtn = document.getElementById('btn-use-skill');
+  if (skillBtn) {
+    skillBtn.onclick = () => {
+      game.skillActive = !game.skillActive;
+      updateControls();
+      updateStatus();
+      if (game.skillActive) showToast('技能已激活，点击棋盘落子发动技能', 2000);
+    };
+  }
+}
+
+// ============================================================
+//  HANDLE BOARD CLICK
+// ============================================================
+function handleBoardClick(x, y) {
+  if (game.gameOver) return;
+
+  // Online: check turn
+  if (game.mode === 'online') {
+    const isMyTurn = (game.currentPlayer === 1 && game.isHost) || (game.currentPlayer === 2 && !game.isHost);
+    if (!isMyTurn) {
+      showToast('当前是对手的回合', 1500);
+      return;
+    }
+  }
+
+  const cell = getCellFromClick(x, y);
+  if (!cell) return;
+  if (game.board[cell.row][cell.col] !== 0) {
+    showToast('该位置已有棋子', 1000);
+    return;
+  }
+
+  // Determine which skill to use
+  const skillId = game.currentPlayer === 1 ? game.player1.skill : game.player2.skill;
+
+  if (game.skillActive && skillId && SKILLS[skillId].type === 'active') {
+    // Execute active skill
+    executeActiveSkill(cell.row, cell.col, skillId);
+  } else {
+    // Normal move
+    executeNormalMove(cell.row, cell.col);
+  }
+}
+
+// ============================================================
+//  EXECUTE NORMAL MOVE
+// ============================================================
+function executeNormalMove(row, col) {
+  const player = game.currentPlayer;
+  game.board[row][col] = player;
+  game.lastMove = { row, col };
+  game.moveCount++;
+
+  // Apply passive skill: 扭转乾坤 (reverse) - opponent's skill
+  // If player X just placed, and opponent has reverse, one of player X's pieces becomes opponent's
+  if (player === 2 && game.player1.skill === 'reverse') {
+    applyReverseEffect(2); // convert one of player2's pieces to player1
+  } else if (player === 1 && game.player2.skill === 'reverse') {
+    applyReverseEffect(1); // convert one of player1's pieces to player2
+  }
+
+  // After reverse, check if opponent won
+  const opp = player === 1 ? 2 : 1;
+  let winner = checkWin(opp);
+  if (winner) { endGame(winner); return; }
+
+  // Check win for current player
+  winner = checkWin(player);
+  if (winner) { endGame(winner); return; }
+
+  // Check draw
+  if (game.moveCount >= BOARD_SIZE * BOARD_SIZE) {
+    endGame(0);
+    return;
+  }
+
+  const positions = [{ row, col }];
+  const skillData = { type: 'normal' };
+
+  // Send move
+  if (game.mode === 'online') {
+    sendPeerData({ type: 'move', positions, player, skillData });
+  }
+
+  finishTurn();
+}
+
+// ============================================================
+//  EXECUTE ACTIVE SKILL
+// ============================================================
+function executeActiveSkill(row, col, skillId) {
+  const player = game.currentPlayer;
+  let positions = [];
+
+  switch (skillId) {
+    case 'speed':
+      positions = executeSpeedSkill(row, col, player);
+      break;
+    case 'extend':
+      positions = executeExtendSkill(row, col, player);
+      break;
+    case 'block2x2':
+      positions = executeBlock2x2Skill(row, col, player);
+      break;
+    case 'split':
+      positions = executeSplitSkill(row, col, player);
+      break;
+  }
+
+  if (positions.length === 0) {
+    showToast('无法使用此技能，位置无效', 1500);
+    return;
+  }
+
+  // Place pieces
+  positions.forEach(p => {
+    game.board[p.row][p.col] = player;
+  });
+  game.lastMove = { row, col };
+  game.moveCount += positions.length;
+
+  // Apply passive: 扭转乾坤 (reverse) - opponent's skill
+  // player just used a skill, opponent has reverse: one of player's pieces becomes opponent's
+  const oppSkill = player === 1 ? game.player2.skill : game.player1.skill;
+  if (oppSkill === 'reverse') {
+    applyReverseEffect(player); // convert one of player's pieces to opponent
+  }
+
+  // After reverse, check if opponent won
+  const opp = player === 1 ? 2 : 1;
+  let winner = checkWin(opp);
+  if (winner) { endGame(winner); return; }
+
+  // Check win for current player
+  winner = checkWin(player);
+  if (winner) { endGame(winner); return; }
+
+  if (game.moveCount >= BOARD_SIZE * BOARD_SIZE) {
+    endGame(0);
+    return;
+  }
+
+  game.skillActive = false;
+
+  // Apply passive: 横扫千军 (sweep) - opponent's skill
+  // player used a skill, opponent has sweep: destroy 2 of player's pieces
+  if (oppSkill === 'sweep') {
+    applySweepEffect(player); // destroy 2 of the player's pieces
+    // Check if opponent won from sweep
+    const sweepWinner = checkWin(opp);
+    if (sweepWinner) { endGame(sweepWinner); return; }
+    // Check if player still has a win
+    const playerWin = checkWin(player);
+    if (playerWin) { endGame(playerWin); return; }
+  }
+
+  if (game.mode === 'online') {
+    sendPeerData({ type: 'move', positions, player, skillData: { type: skillId } });
+  }
+
+  finishTurn();
+}
+
+// ============================================================
+//  SKILL 1: 兵贵神速
+// ============================================================
+function executeSpeedSkill(row, col, player) {
+  const positions = [{ row, col }];
+  const emptyCells = [];
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (game.board[r][c] === 0 && !(r === row && c === col)) {
+        emptyCells.push({ row: r, col: c });
+      }
+    }
+  }
+  // Shuffle and pick up to 10
+  const count = Math.min(10, emptyCells.length);
+  for (let i = emptyCells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [emptyCells[i], emptyCells[j]] = [emptyCells[j], emptyCells[i]];
+  }
+  for (let i = 0; i < count; i++) {
+    positions.push(emptyCells[i]);
+  }
+  showToast(`兵贵神速！额外放置了 ${count} 颗棋子`, 2000);
+  return positions;
+}
+
+// ============================================================
+//  SKILL 3: 避实击虚
+// ============================================================
+function executeExtendSkill(row, col, player) {
+  const positions = [{ row, col }];
+  const directions = [
+    // Diagonal directions
+    { dr: 1, dc: 1 }, { dr: 1, dc: -1 }, { dr: -1, dc: 1 }, { dr: -1, dc: -1 },
+    // Straight directions
+    { dr: 1, dc: 0 }, { dr: -1, dc: 0 }, { dr: 0, dc: 1 }, { dr: 0, dc: -1 }
+  ];
+
+  // Try diagonal first (first 4), then straight
+  for (let di = 0; di < directions.length; di++) {
+    const d = directions[di];
+    const isDiagonal = di < 4;
+    let valid = true;
+    const temp = [];
+    for (let i = 1; i <= 4; i++) {
+      const nr = row + d.dr * i;
+      const nc = col + d.dc * i;
+      if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE || game.board[nr][nc] !== 0) {
+        valid = false;
+        break;
+      }
+      temp.push({ row: nr, col: nc });
+    }
+    if (valid) {
+      temp.forEach(p => positions.push(p));
+      showToast('避实击虚！延伸4颗棋子', 1500);
+      return positions;
+    }
+    // If diagonal failed, try all 4 before moving to straight
+    if (isDiagonal && di === 3) {
+      // All diagonals failed, continue to straight
+      continue;
+    }
+  }
+
+  // If no extension possible, just place the one piece
+  showToast('避实击虚：无法延伸，仅放置1颗棋子', 1500);
+  return positions;
+}
+
+// ============================================================
+//  SKILL 4: 破釜沉舟
+// ============================================================
+function executeBlock2x2Skill(row, col, player) {
+  const positions = [];
+  // Try to place a 2x2 block starting from (row, col) as top-left
+  for (let dr = 0; dr < 2; dr++) {
+    for (let dc = 0; dc < 2; dc++) {
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && game.board[nr][nc] === 0) {
+        positions.push({ row: nr, col: nc });
+      }
+    }
+  }
+  if (positions.length >= 4) {
+    showToast('破釜沉舟！放置2x2棋子阵', 1500);
+  } else if (positions.length > 0) {
+    showToast(`破釜沉舟！仅能放置 ${positions.length} 颗棋子`, 1500);
+  }
+  return positions;
+}
+
+// ============================================================
+//  SKILL 5: 事半功倍
+// ============================================================
+function executeSplitSkill(row, col, player) {
+  const positions = [{ row, col }];
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  dirs.forEach(([dr, dc]) => {
+    const nr = row + dr;
+    const nc = col + dc;
+    if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && game.board[nr][nc] === 0) {
+      positions.push({ row: nr, col: nc });
+    }
+  });
+  showToast(`事半功倍！棋子分裂为 ${positions.length} 颗`, 1500);
+  return positions;
+}
+
+// ============================================================
+//  PASSIVE SKILL: 扭转乾坤
+// ============================================================
+function applyReverseEffect(opponentPlayer) {
+  const opponentPieces = [];
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (game.board[r][c] === opponentPlayer) {
+        opponentPieces.push({ row: r, col: c });
+      }
+    }
+  }
+  if (opponentPieces.length > 0) {
+    const pick = opponentPieces[Math.floor(Math.random() * opponentPieces.length)];
+    game.board[pick.row][pick.col] = opponentPlayer === 1 ? 2 : 1;
+    showToast('扭转乾坤！一颗对手棋子被转化', 1500);
+  }
+}
+
+// ============================================================
+//  PASSIVE SKILL: 横扫千军
+// ============================================================
+function applySweepEffect(opponentPlayer) {
+  const opponentPieces = [];
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (game.board[r][c] === opponentPlayer) {
+        opponentPieces.push({ row: r, col: c });
+      }
+    }
+  }
+  const count = Math.min(2, opponentPieces.length);
+  if (count > 0) {
+    // Shuffle
+    for (let i = opponentPieces.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [opponentPieces[i], opponentPieces[j]] = [opponentPieces[j], opponentPieces[i]];
+    }
+    for (let i = 0; i < count; i++) {
+      game.board[opponentPieces[i].row][opponentPieces[i].col] = 0;
+    }
+    showToast(`横扫千军！摧毁对手 ${count} 颗棋子`, 1500);
+  }
+}
+
+// ============================================================
+//  APPLY REMOTE MOVE
+// ============================================================
+function applyRemoteMove(positions, player, skillData) {
+  // player = remote player who made the move
+  const localPlayer = game.isHost ? 1 : 2;
+  const remotePlayer = player;
+
+  // Place pieces
+  positions.forEach(p => {
+    game.board[p.row][p.col] = remotePlayer;
+  });
+  game.lastMove = positions[0];
+  game.moveCount += positions.length;
+
+  // Apply local player's passive: 扭转乾坤 (reverse)
+  // If local player has reverse, convert one of remote player's pieces to local player's color
+  const localSkill = localPlayer === 1 ? game.player1.skill : game.player2.skill;
+  if (localSkill === 'reverse') {
+    applyReverseEffect(remotePlayer); // convert one of remotePlayer's pieces to localPlayer
+  }
+
+  // After reverse, check if local player won
+  let winner = checkWin(localPlayer);
+  if (winner) { endGame(winner); return; }
+
+  // Check win for remote player
+  winner = checkWin(remotePlayer);
+  if (winner) { endGame(winner); return; }
+
+  if (game.moveCount >= BOARD_SIZE * BOARD_SIZE) {
+    endGame(0);
+    return;
+  }
+
+  game.skillActive = false;
+
+  // Apply local player's passive: 横扫千军 (sweep)
+  // If remote player used a skill and local player has sweep, destroy 2 of remote player's pieces
+  if (skillData && skillData.type && skillData.type !== 'normal') {
+    if (localSkill === 'sweep') {
+      applySweepEffect(remotePlayer);
+      // Check if local player won from sweep
+      const sweepLocalWin = checkWin(localPlayer);
+      if (sweepLocalWin) { endGame(sweepLocalWin); return; }
+      // Check if remote player still has a win
+      const sweepRemoteWin = checkWin(remotePlayer);
+      if (sweepRemoteWin) { endGame(sweepRemoteWin); return; }
+    }
+  }
+
+  finishTurn();
+}
+
+// ============================================================
+//  FINISH TURN
+// ============================================================
+function finishTurn() {
+  game.currentPlayer = game.currentPlayer === 1 ? 2 : 1;
+  renderBoard();
+  updateStatus();
+  updateControls();
+}
+
+// ============================================================
+//  WIN CHECK
+// ============================================================
+function checkWin(player) {
+  const winNeed = player === 1 ? game.player1.winNeed : game.player2.winNeed;
+
+  const directions = [
+    [0, 1],   // horizontal
+    [1, 0],   // vertical
+    [1, 1],   // diagonal \
+    [1, -1]   // diagonal /
+  ];
+
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (game.board[r][c] !== player) continue;
+      for (const [dr, dc] of directions) {
+        let count = 1;
+        for (let i = 1; i < winNeed; i++) {
+          const nr = r + dr * i;
+          const nc = c + dc * i;
+          if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE) break;
+          if (game.board[nr][nc] !== player) break;
+          count++;
+        }
+        if (count >= winNeed) return player;
+      }
+    }
+  }
+  return null;
+}
+
+// ============================================================
+//  END GAME
+// ============================================================
+function endGame(winner) {
+  game.gameOver = true;
+  game.winner = winner;
+  renderBoard();
+
+  if (winner === 0) {
+    showToast('平局！', 3000);
+  } else {
+    const name = winner === 1 ? '玩家1（黑棋）' : '玩家2（白棋）';
+    showToast(`🎉 ${name} 获胜！`, 5000);
+  }
+
+  updateStatus();
+
+  if (game.mode === 'online') {
+    sendPeerData({ type: 'game_over', winner });
+  }
+}
+
+function showGameOverScreen() {
+  if (game.gameOver) return;
+  const player = game.currentPlayer;
+  const winner = player === 1 ? 2 : 1;
+  endGame(winner);
+}
+
+// ============================================================
+//  RESET & BACK
+// ============================================================
+function resetGame() {
+  if (game.mode === 'online' && game.peerConn && game.peerConn.open) {
+    sendPeerData({ type: 'reset' });
+  }
+  startGame();
+}
+
+function backToMenu() {
+  if (game.peer) { game.peer.destroy(); game.peer = null; }
+  if (game.peerConn) { game.peerConn.close(); game.peerConn = null; }
+  game.peerConn = null;
+  game.peer = null;
+  game.roomCode = null;
+  game.mode = null;
+  game.isHost = false;
+  game.player1.skill = null;
+  game.player2.skill = null;
+  document.getElementById('online-menu').style.display = 'block';
+  document.getElementById('online-waiting').style.display = 'none';
+  document.getElementById('join-panel').style.display = 'none';
+  showScreen('screen-connection');
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  showScreen('screen-connection');
+});
+</script>
+</body>
+</html>
